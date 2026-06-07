@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verte — AI Waste Scanner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-stone-100 font-sans min-h-screen flex flex-col items-center py-8 px-4">
+
+    <header class="w-full max-w-md text-center mb-6">
+        <h1 class="text-4xl font-black text-emerald-700 tracking-tight">verte.</h1>
+        <p class="text-stone-500 text-sm mb-4">Scan waste, grow your vine connection</p>
+        
+        <div class="bg-white rounded-2xl p-4 shadow-sm flex justify-around border border-stone-200">
+            <div class="text-center">
+                <span class="block text-xs font-bold uppercase tracking-wider text-stone-400">Total Points</span>
+                <span id="stat-points" class="text-2xl font-black text-stone-800">0</span>
+            </div>
+            <div class="border-r border-stone-200"></div>
+            <div class="text-center">
+                <span class="block text-xs font-bold uppercase tracking-wider text-stone-400">Vine Streak</span>
+                <span id="stat-streak" class="text-2xl font-black text-emerald-600">🌿 0 days</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="w-full max-w-md bg-white rounded-3xl p-6 shadow-md border border-stone-200">
+        
+       <div id="camera-section" class="space-y-4">
+    <div class="relative aspect-square w-full bg-stone-900 rounded-2xl overflow-hidden shadow-inner flex items-center justify-center">
+        <video id="webcam" autoplay playsinline class="absolute inset-0 w-full h-full object-cover transform -scale-x-100"></video>
+        <canvas id="snapshot" class="hidden"></canvas>
+    </div>
+    
+    <button id="btn-scan" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all transform active:scale-95 text-lg">
+        📸 Scan Live with Camera
+    </button>
+
+    <div class="flex items-center my-2 text-stone-400 text-xs font-bold uppercase tracking-wider">
+        <div class="flex-1 border-t border-stone-200"></div>
+        <span class="px-3">OR</span>
+        <div class="flex-1 border-t border-stone-200"></div>
+    </div>
+
+    <div class="w-full">
+        <label for="file-input" class="w-full bg-stone-200 hover:bg-stone-300 text-stone-700 font-bold py-3 rounded-xl transition-all block text-center cursor-pointer">
+            📁 Upload Image File
+        </label>
+        <input id="file-input" type="file" accept="image/*" class="hidden" />
+    </div>
+</div>
+        <div id="guess-section" class="hidden space-y-6">
+            <div class="text-center">
+                <h3 class="text-xl font-bold text-stone-800">Item Processed!</h3>
+                <p class="text-stone-500 text-sm">Where does this item belong? Guess to grow your vine:</p>
+            </div>
+            
+            <div class="grid grid-cols-1 gap-3">
+                <button data-choice="recyclable" class="btn-choice w-full border-2 border-stone-200 hover:border-blue-500 hover:bg-blue-50/50 rounded-xl p-4 text-left font-bold text-stone-700 transition-all flex justify-between items-center">
+                    🔵 Recyclable <span class="text-stone-300">→</span>
+                </button>
+                <button data-choice="compostable" class="btn-choice w-full border-2 border-stone-200 hover:border-emerald-200 hover:bg-emerald-50/50 rounded-xl p-4 text-left font-bold text-stone-700 transition-all flex justify-between items-center">
+                    🟢 Compostable <span class="text-stone-300">→</span>
+                </button>
+                <button data-choice="landfill" class="btn-choice w-full border-2 border-stone-200 hover:border-amber-500 hover:bg-amber-50/50 rounded-xl p-4 text-left font-bold text-stone-700 transition-all flex justify-between items-center">
+                    🟤 Landfill <span class="text-stone-300">→</span>
+                </button>
+            </div>
+        </div>
+
+        <div id="result-section" class="hidden text-center space-y-4 py-4">
+            <div id="result-icon" class="text-6xl animate-bounce">✨</div>
+            <h2 id="result-title" class="text-2xl font-black">Result!</h2>
+            <p id="result-text" class="text-stone-600 px-4"></p>
+            <button id="btn-reset" class="mt-4 bg-stone-800 hover:bg-stone-900 text-white font-bold py-3 px-6 rounded-xl transition-all">
+                🔄 Scan Another Item
+            </button>
+        </div>
+
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>

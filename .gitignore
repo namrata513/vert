@@ -1,0 +1,16 @@
+# .gitignore
+# Ignore python virtual environments
+verte-env/
+venv/
+__pycache__/
+*.pyc
+
+# Ignore massive localized AI models and datasets
+*.h5
+*.keras
+dataset/
+processed/
+
+# Ignore local SQLite development database files
+*.db
+*.sqlite3
