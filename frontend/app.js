@@ -1,6 +1,6 @@
 // frontend/app.js
 
-const API_BASE = "https://vert-7iyy.onrender.com";
+const API_BASE = "https://vert-7iyy.onrender.com/api";
 const USER_ID = localStorage.getItem("verte_user_id");
 if (!USER_ID) {
     alert("Please log in first!");
