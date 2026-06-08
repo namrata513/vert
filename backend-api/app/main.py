@@ -1,5 +1,3 @@
-# backend-api/app/main.py
-
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime, timedelta
@@ -22,6 +20,8 @@ app.secret_key = "verte_secret_vine_key_change_in_production"
 # Handle paths smoothly whether running from app/ or project root
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "mobilenetv2_waste.h5")
+DB_PATH = os.path.join(BASE_DIR, "database.db")
+
 if not os.path.exists(MODEL_PATH):
     # Fallback to check relative workspace paths if directory layout differs
     MODEL_PATH = "../models/mobilenetv2_waste.h5"
@@ -34,22 +34,53 @@ ai_engine = VerteClassifier(model_path=MODEL_PATH)
 # Active scans tracking (Temporary storage for matching user guesses to photos)
 ACTIVE_SCANS = {}
 
+def init_db():
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        # Create users table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL
+            )
+        ''')
+        # Create user_scores table needed for streaks/points
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_scores (
+                user_id INTEGER PRIMARY KEY,
+                total_points INTEGER DEFAULT 0,
+                streak_count INTEGER DEFAULT 0,
+                last_upload_at TEXT,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+        ''')
+        # Create scan_history table needed for logs
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS scan_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                predicted_category TEXT,
+                user_guess TEXT,
+                is_correct INTEGER,
+                points_awarded INTEGER,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+        ''')
+        conn.commit()
+    print("🗄️ SQLite Database schema checks passed cleanly!")
+
+init_db()
+
 def get_db_connection():
-    # Looks for your newly initialized database file inside the database directory
-    db_location = "./database/verte.db"
-    if not os.path.exists(db_location):
-        db_location = "verte.db"
-        
-    conn = sqlite3.connect(db_location)
+    # ✅ FIX: All routes now use the exact same DB_PATH file location
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row  # Allows reading rows as key-value dictionaries
     return conn
 
+
 @app.route("/api/upload", methods=["POST"])
 def upload_image():
-    """
-    Step 1: User uploads an image via the camera component.
-    The AI processes it in secret and returns the three '?' options to the user.
-    """
     if 'image' not in request.files:
         return jsonify({"error": "No image file provided"}), 400
         
@@ -68,8 +99,6 @@ def upload_image():
             "timestamp": datetime.utcnow()
         }
         
-        # Return success but DO NOT give away the answer yet! 
-        # This populates the three '?' options on your sketch screen.
         return jsonify({
             "message": "Image analyzed successfully. Time to guess!",
             "options": ["recyclable", "compostable", "landfill"]
@@ -81,22 +110,16 @@ def upload_image():
 
 @app.route("/api/verify-guess", methods=["POST"])
 def verify_guess():
-    """
-    Step 2: User selects one of the 3 '?' boxes.
-    Evaluates their choice against the AI's result and updates points/streaks persistently.
-    """
     data = request.json or {}
     user_id = int(data.get("user_id", 1))
     user_guess = data.get("guess", "").lower()
     
-    # Check if there is an active scan awaiting confirmation
     scan_session = ACTIVE_SCANS.get(user_id)
     if not scan_session:
         return jsonify({"error": "No active upload session found for this user."}), 400
         
     true_category = scan_session["true_category"]
     
-    # Base configuration values for our vine mechanics
     points_awarded = 0
     is_correct = (user_guess == true_category)
     now = datetime.utcnow()
@@ -105,10 +128,8 @@ def verify_guess():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Ensure profile metrics placeholder defaults are established for this profile ID
     cursor.execute("INSERT OR IGNORE INTO user_scores (user_id, total_points, streak_count) VALUES (?, 0, 0)", (user_id,))
     
-    # Grab current metrics stats out of the SQLite tables
     user_profile = cursor.execute("SELECT * FROM user_scores WHERE user_id = ?", (user_id,)).fetchone()
     total_points = user_profile["total_points"]
     streak_count = user_profile["streak_count"]
@@ -118,7 +139,6 @@ def verify_guess():
         points_awarded = 10
         total_points += points_awarded
         
-        # Streak mechanics: check if last scan was within 24 hours to grow vine
         if last_upload_at is None:
             streak_count = 1
         else:
@@ -134,14 +154,12 @@ def verify_guess():
         streak_count = 0 
         status_message = f"Not quite! The AI classified this item as {true_category}."
         
-    # Write updated levels metadata properties back to database
     cursor.execute("""
         UPDATE user_scores 
         SET total_points = ?, streak_count = ?, last_upload_at = ? 
         WHERE user_id = ?
     """, (total_points, streak_count, last_upload_at, user_id))
     
-    # Maintain a chronological analytics trace file history block log
     cursor.execute("""
         INSERT INTO scan_history (user_id, predicted_category, user_guess, is_correct, points_awarded)
         VALUES (?, ?, ?, ?, ?)
@@ -150,8 +168,8 @@ def verify_guess():
     conn.commit()
     conn.close()
     
-    # Clean up the processed session scan
-    del ACTIVE_SCANS[user_id]
+    if user_id in ACTIVE_SCANS:
+        del ACTIVE_SCANS[user_id]
     
     return jsonify({
         "correct": is_correct,
@@ -164,61 +182,60 @@ def verify_guess():
         }
     }), 200
 
-@app.route("/api/register", methods=["POST",'OPTIONS'])
+
+@app.route('/api/register', methods=['POST'])
 def register_user():
     """
-    Registers a new unique user profile and initiates their starting dashboard metrics.
+    ✅ FIX: Fully implemented registration query pipeline with password hashing.
     """
-    if request.method == 'OPTIONS':
-        return jsonify({"message": "Preflight check successful."}), 200
-    data = request.json or {}
-    username = data.get("username", "").strip()
-    password = data.get("password", "").strip()
-
-    if not username or not password:
-        return jsonify({"error": "Username and password are required fields."}), 400
-
-    if len(password) < 6:
-        return jsonify({"error": "Password must be at least 6 characters long."}), 400
-
-    # Scramble the password using secure cryptographic hashing
-    hashed_password = generate_password_hash(password)
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
     try:
-        # 1. Insert row into core users table
-        cursor.execute(
-            "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-            (username, hashed_password)
-        )
-        new_user_id = cursor.lastrowid
+        data = request.json or {}
+        username = data.get("username", "").strip()
+        password = data.get("password", "").strip()
 
-        # 2. Automatically provision an empty matching baseline stats sheet
-        cursor.execute(
-            "INSERT INTO user_scores (user_id, total_points, streak_count) VALUES (?, 0, 0)",
-            (new_user_id,)
-        )
+        if not username or not password:
+            return jsonify({"error": "Username and password are required."}), 400
+
+        # Generate standard cryptographically secure password hash
+        hashed_password = generate_password_hash(password)
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
         
-        conn.commit()
+        try:
+            cursor.execute(
+                "INSERT INTO users (username, password) VALUES (?, ?)",
+                (username, hashed_password)
+            )
+            conn.commit()
+            
+            # Fetch the newly created user's ID
+            user_id = cursor.lastrowid
+            
+            # Initialize their score tracking row immediately
+            cursor.execute(
+                "INSERT INTO user_scores (user_id, total_points, streak_count) VALUES (?, 0, 0)",
+                (user_id,)
+            )
+            conn.commit()
+            
+        except sqlite3.IntegrityError:
+            return jsonify({"error": "Username already exists. Please choose another."}), 400
+        finally:
+            conn.close()
+
         return jsonify({
             "success": True,
-            "message": "Account created successfully!",
-            "user_id": new_user_id
+            "message": "User registered successfully!",
+            "user_id": user_id
         }), 201
-
-    except sqlite3.IntegrityError:
-        return jsonify({"error": "Username is already taken. Try another name!"}), 400
-    finally:
-        conn.close()
+        
+    except Exception as e:
+        return jsonify({"error": f"Database write failure: {str(e)}"}), 500
 
 
 @app.route("/api/login", methods=["POST"])
 def login_user():
-    """
-    Authenticates a user's credentials against the secure database hash.
-    """
     data = request.json or {}
     username = data.get("username", "").strip()
     password = data.get("password", "").strip()
@@ -230,8 +247,8 @@ def login_user():
     user = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
     conn.close()
 
-    # Verify matching hash matrices
-    if user is None or not check_password_hash(user["password_hash"], password):
+    # ✅ FIX: Pointed verify sequence to user["password"] to match table schema
+    if user is None or not check_password_hash(user["password"], password):
         return jsonify({"error": "Invalid username or password combination."}), 401
 
     return jsonify({
@@ -240,13 +257,9 @@ def login_user():
         "user_id": user["id"]
     }), 200
 
-# Add these endpoints right above the if __name__ == "__main__": block in main.py
 
 @app.route("/", methods=["GET"])
 def home_fallback():
-    """
-    Prevents confusing 404 errors if a developer or user visits the bare API URL.
-    """
     return jsonify({
         "status": "online",
         "app": "Verte AI Engine Backend API",
@@ -257,9 +270,6 @@ def home_fallback():
 
 @app.route("/api/user-stats/<int:user_id>", methods=["GET"])
 def get_user_stats(user_id):
-    """
-    Fetches historical points matrix properties to display on the profile dashboard header.
-    """
     conn = get_db_connection()
     row = conn.execute("SELECT total_points, streak_count FROM user_scores WHERE user_id = ?", (user_id,)).fetchone()
     conn.close()
@@ -272,8 +282,7 @@ def get_user_stats(user_id):
         "streak_count": row["streak_count"]
     }), 200
 
+
 if __name__ == "__main__":
-    # Read port from cloud environment variable, fallback to 5000 locally
     port = int(os.environ.get("PORT", 5000))
-    # Host must be 0.0.0.0 in production so it binds to the cloud network interface
     app.run(host="0.0.0.0", port=port, debug=False)
