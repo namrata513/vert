@@ -12,7 +12,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from classifier import VerteClassifier
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes (You can configure this more tightly in production)
+CORS(app, resources={r"/*": {"origins": "*",
+                             "methods":["GET","POST","OPTIONS"]
+                                        "allow_headers": ["Content-Type","Authorization"]}})  # Enable CORS for all routes (You can configure this more tightly in production)
 app.secret_key = "verte_secret_vine_key_change_in_production"
 
 # Handle paths smoothly whether running from app/ or project root
@@ -159,11 +161,13 @@ def verify_guess():
         }
     }), 200
 
-@app.route("/api/register", methods=["POST"])
+@app.route("/api/register", methods=["POST",'OPTIONS'])
 def register_user():
     """
     Registers a new unique user profile and initiates their starting dashboard metrics.
     """
+    if request.method == 'OPTIONS':
+        return jsonify({"message": "Preflight check successful."}), 200
     data = request.json or {}
     username = data.get("username", "").strip()
     password = data.get("password", "").strip()
