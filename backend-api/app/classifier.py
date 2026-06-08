@@ -1,48 +1,52 @@
-# backend-api/app/classifier.py
-
-import numpy as np
 import tensorflow as tf
-from tensorflow.keras.preprocessing import image
-from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
+import numpy as np
+from PIL import Image
 
 class VerteClassifier:
-    def __init__(self, model_path="models/mobilenetv2_waste.h5"):
+    def __init__(self, model_path):
         print(f"🧠 Loading AI Model weights from: {model_path}...")
-        self.model = tf.keras.models.load_model(model_path)
+        # Load the model layout safely without compilation snags
+        self.model = tf.keras.models.load_model(model_path, compile=False)
         
-        # Hardcoded indices fallback matching train_generator.class_indices orders:
-        # standard alphabet order: ['compostable', 'landfill', 'recyclable']
-        self.labels = ['compostable', 'landfill', 'recyclable']
+        # ⚠️ NOTE: Make sure this list order perfectly matches the classes
+        # your model was trained on (e.g., check if index 0 is compostable)
+        self.labels = ["compostable", "landfill", "recyclable"] 
 
     def predict(self, image_bytes):
-        """
-        Processes an incoming file stream, formats the matrices, 
-        and runs inference against the trained classification model layers.
-        """
-        # 1. Load the raw bytes asset stream and stretch to 224x224 target space
-        img = image.load_img(image_bytes, target_size=(224, 224))
-        
-        # 2. Reshape image canvas grid elements into numeric array structures
-        img_array = image.img_to_array(img)
-        
-        # 3. Add batch sizing wrapper layer dimensions -> (1, 224, 224, 3)
-        img_array = np.expand_dims(img_array, axis=0)
-        
-        # 4. CRITICAL: Re-align scales from [0, 255] down into [-1, 1] bounds 
-        img_array = preprocess_input(img_array)
-        
-        # 5. Feed matrix array across inference layers
-        predictions = self.model.predict(img_array)
-        
-        # 6. Extract classification element with maximum index value confidence
-        highest_score_index = np.argmax(predictions[0])
-        predicted_category = self.labels[highest_score_index]
-        confidence_score = float(predictions[0][highest_score_index])
-        
-        print(分配 := f"🤖 Match Found: {predicted_category} ({confidence_score * 100:.2f}%)")
-        
-        return {
-            "category": predicted_category,
-            "confidence": confidence_score,
-            "raw_material": "unknown"  # Extensible property placeholder
-        }
+        try:
+            # 1. Open the image file bytes with Pillow
+            img = Image.open(image_bytes)
+            
+            # 2. Force conversion to RGB mode (strips alpha channel layers from PNGs)
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+                
+            # 3. Downscale or upscale the photo to match MobileNet's 224x224 grid dimension
+            img = img.resize((224, 224))
+            
+            # 4. Turn the visual pixels into a raw mathematical float array
+            img_array = tf.keras.preprocessing.image.img_to_array(img)
+            
+            # 5. Normalize pixel layers (Squash 0-255 numbers to a clear 0.0 - 1.0 range)
+            img_array = img_array / 255.0
+            
+            # 6. Expand the array dimensions to mimic a multi-image batch structure [1, 224, 224, 3]
+            img_array = np.expand_dims(img_array, axis=0)
+            
+            # 7. Feed the prepared array matrix to the deep learning model layers
+            predictions = self.model.predict(img_array)
+            predicted_class_idx = np.argmax(predictions[0])
+            
+            # Extract the correct string label mapping index
+            final_category = self.labels[predicted_class_idx]
+            
+            print(f"🎯 AI Inference Complete. Class Index: {predicted_class_idx} -> Label: {final_category}")
+            
+            return {
+                "category": final_category,
+                "raw_material": "unknown",
+                "confidence": float(predictions[0][predicted_class_idx])
+            }
+            
+        except Exception as e:
+            raise RuntimeError(f"Matrix preprocessing crash: {str(e)}")
