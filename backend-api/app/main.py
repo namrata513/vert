@@ -98,14 +98,14 @@ def home_fallback():
 def register_user():
     """Registers users by accepting variations of frontend payload keys."""
     try:
-        data = request.json or {}
-        print(f"📥 Received Registration Payload: {data}") # This prints to your Render logs so we can see it!
+        data = request.get_json(force=True, silent=True) or {}
+        print(f"📥 RAW FRONTEND DATA RECEIVED: {data}", flush=True)
 
         # Try extracting variations of "username" sent by the frontend
         username = data.get("username") or data.get("user") or data.get("email")
         # Try extracting variations of "password" sent by the frontend
         password = data.get("password") or data.get("pass")
-
+    
         # Clean strings if they exist
         if username: username = str(username).strip()
         if password: password = str(password).strip()
@@ -153,7 +153,7 @@ def register_user():
 def login_user():
     """Authenticates account matching signatures safely."""
     try:
-        data = request.json or {}
+        data = request.get_json(force=True, silent=True) or {}
         username = data.get("username", "").strip()
         password = data.get("password", "").strip()
 
