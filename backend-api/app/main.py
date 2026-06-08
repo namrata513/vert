@@ -96,14 +96,25 @@ def home_fallback():
 
 @app.route('/api/register', methods=['POST'])
 def register_user():
-    """Registers users and cryptographically hashes password records safely."""
+    """Registers users by accepting variations of frontend payload keys."""
     try:
         data = request.json or {}
-        username = data.get("username", "").strip()
-        password = data.get("password", "").strip()
+        print(f"📥 Received Registration Payload: {data}") # This prints to your Render logs so we can see it!
+
+        # Try extracting variations of "username" sent by the frontend
+        username = data.get("username") or data.get("user") or data.get("email")
+        # Try extracting variations of "password" sent by the frontend
+        password = data.get("password") or data.get("pass")
+
+        # Clean strings if they exist
+        if username: username = str(username).strip()
+        if password: password = str(password).strip()
 
         if not username or not password:
-            return jsonify({"error": "Username and password fields cannot be empty."}), 400
+            return jsonify({
+                "error": "Registration failed. Backend did not receive username or password values.",
+                "received_keys": list(data.keys())
+            }), 400
 
         hashed_password = generate_password_hash(password)
 
