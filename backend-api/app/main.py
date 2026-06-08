@@ -20,7 +20,8 @@ CORS(app, resources={r"/*": {
 app.secret_key = "verte_secret_vine_key_change_in_production"
 
 # Handle paths smoothly whether running from app/ or project root
-MODEL_PATH = "./models/mobilenetv2_waste.h5"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, "mobilenetv2_waste.h5")
 if not os.path.exists(MODEL_PATH):
     # Fallback to check relative workspace paths if directory layout differs
     MODEL_PATH = "../models/mobilenetv2_waste.h5"
