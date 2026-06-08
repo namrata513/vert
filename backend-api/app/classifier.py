@@ -8,7 +8,7 @@ from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 class VerteClassifier:
     def __init__(self, model_path="models/mobilenetv2_waste.h5"):
         print(f"🧠 Loading AI Model weights from: {model_path}...")
-        self.model = tf.keras.models.load_model(model_path)
+        self.model = tf.keras.models.load_model(model_path, compile=False)
         
         # Hardcoded indices fallback matching train_generator.class_indices orders:
         # standard alphabet order: ['compostable', 'landfill', 'recyclable']
