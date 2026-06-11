@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <link rel="manifest" href="/manifest.json">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Verte — Join the Connection</title>
@@ -127,6 +128,16 @@
             alert(`System Error message: ${err.message}`);
         }
     });
+</script>
+<script>
+  // Registers the Service Worker script if supported by the Android browser
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then(reg => console.log('🌿 verte Service Worker registered cleanly!', reg))
+        .catch(err => console.error('Service Worker registration failed:', err));
+    });
+  }
 </script>
 </body>
 </html>
